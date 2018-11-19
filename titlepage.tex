@@ -1,0 +1,32 @@
+%%% Title page for seminar
+
+\begin{titlepage}
+
+\centering
+
+\begin{tikzpicture}[remember picture,overlay]
+\node[shift={(-6cm,-24cm)},opacity=1] {\includegraphics[scale=0.6]{./figures/hgi_syssec}};
+\node[shift={(6cm,-24cm)},opacity=1] {\includegraphics[scale=1.5]{./figures/Logo_RUB}};
+\end{tikzpicture}
+\vspace{2cm}
+
+\textsc{\LARGE Master Seminar}\\[0.2cm]
+\textsc{\LARGE ``Current Topics in Computer Security''}\\[0.9cm]
+\textsc{\Large Chair for Systems Security}\\[0.5cm]
+\textsc{\Large Ruhr-University Bochum}\\[1.5cm]
+
+% Title
+\HRule \\[0.4cm]
+{ \huge \bfseries \@title}\\[0.4cm]
+
+\HRule \\[1.5cm]
+
+% Author
+\begin{minipage}{0.4\textwidth}
+\begin{flushleft} \large
+\emph{Author:}\\{\@author}\\[1cm]
+{\large \today}
+\end{flushleft}
+\end{minipage}
+
+\end{titlepage}
