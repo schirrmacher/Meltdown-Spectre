@@ -61,96 +61,92 @@
 
 %%%
 \chapter{Overview}  
-\label{ch:intro}
+\label{ch:overview}
 %%%
 
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-
+Meltdown and Spectre are the result of the most critical vulnerabilities in todays processors 
+which threaten the modern world of computing. They allow reading secret data from other processes running on
+the same machine and thereby circumventing the protection mechanisms of operating systems.
+These exploits put hardware and software companies under pressure for finding short-term as well
+as long-term solutions to address arising problems. To avoid debacles quick solutions have been found 
+for some of the uncovered exploit techniques, but in the long run the fundamental design of modern 
+processors has to be challenged and reconsidered.
 
 \section{Meltdown and Spectre in Brief}
 \label{ch:intro:motivation}
 
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-
-\section{Discovery and Research}
-\label{ch:intro:discoveryAndResearch}
-
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
+Meltdown and Spectre misuse a feature of modern processors which enables fast execution of machine instructions, 
+called \textit{out-of-order execution}. This feature allows to force the CPU to execute instructions 
+which read secret data from address spaces of other processes or even the kernel address space. 
+Even though the processors behave correctly by cleaning or vanishing illegally accessed data, 
+they still leave traces which enable to build so called \textit{covert channels} 
+and thus leveraging attacks likes Meltdown and Spectre.
 
 \section{Relevance and Practical Impact}
 \label{ch:intro:motivation}
 
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-~\cite{Rivest:83:RSA}
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-~\cite{Garfinkel:03:VMI}
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
+Especially the rise of cloud computing accelerates the urgency for solving Meltdown and Spectre related issues.
+Companies which run their software in the cloud became vulnerable because the exploit techniques enable attackers
+to read private data of customers by running malicious software on the same machines. 
 
+Also applications running on mobile phones or laptops are vulnerable and expose their sensitive data. 
+Even browsers can easily be attacked with a short JavaScript implementation of Spectre and thus reveal secret data
+like passwords, session keys or cookies from websites. These examples indicate that Meltdown and Spectre are a serious matter which should be dealt with.
+
+This work introduces all basics needed to understand Meltdown and Spectre and also dives deeper into the implementation
+to focus on technical details of the exploits. At the end the reader should have a deep understanding of Meltdown and Spectre
+and should be able to distinguish their traits and impact on modern computing.
 
 %%%
-\chapter{CPU Architecture Basics}
-\label{ch:background}
+\chapter{Computer Architecture Basics}
+\label{ch:basics}
 %%%
 
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
+This chapter introduces some basics which are needed to understand and create implementations of Meltdown and Spectre. 
+All parts of this chapter are presented isolated and not in the context of the exploits. 
+Rather their connection and purpose is highlighted in chapters 3 and 4.
 
-\section{Architecture versus Microarchitecture}
+\section{Processes, Address Spaces and Caching}
 \label{ch:intro:motivation}
 
-XXXXXXXXXXXXXXXXXXXX
+Operating systems use processes as an abstraction to handle execution of multiple programs at the same time
+ and managing their associated resources like address spaces, registers, list of open files, 
+ out-standing alarms and lists of related processes ~\cite{tanenbaum2009modern:39-41}. 
+CPU hardware ensures that processes of the operating system, \textit{kernel processes},  and processes of users are protected from each other 
+by generating isolated address spaces for each process 
+and preventing mutual modification or illegal access of data ~\cite{silberschatz2012operating}.
 
-\section{Traps}
+Every illegal operation of a process trying to circumvent these isolation boundaries results in a 
+fatal error, called \textit{trap}, which must be handled by the operating system. Memory separation is realized 
+with the help of \textit{virtual address spaces} which are further divided into fixed-size \textit{pages} 
+which are mapped into \textit{physical address space} by page tables ~\cite{hennessy2011computer:105-107}. 
+A page table knows which process is allowed to access a specific page and thus it serves as
+ a restriction mechanism to monitor and control illegal memory access.
+
+The memory of a computer is divided into \textit{cache lines} which can be stored temporarily in the cache to accelerate
+access of frequently used memory locations ~\cite{tanenbaum2009modern:24-27}. Because the size of a cache is limited
+cache lines have to be evicted over time depending on their frequency of usage resulting in a \textit{cache hit} if a line
+is cached, otherwise in a \textit{cache miss}. If a cache miss occurs the processor has to load data from another
+cache or from memory which takes more clock cycles the deeper .
+
+\section{Out-of-order Execution}
 \label{ch:intro:motivation}
 
-XXXXXXXXXXXXXXXXXXXX
+Tomasulo ~\cite{tomasulo1967efficient} created an algorithm which analyses a set or \textit{window} of
+instructions and their relationships to maximize their overlapping capabilities and thus the ability to get parallelized 
+without harming essential precedences. This allows processors to reorganize instructions so that their execution is faster 
+in comparison to the execution time with the original order.
+Succeeding instructions can be executed in parallel if preceding ones
+ have to wait for accessing memory in case of a cache miss~\cite{hennessy2011computer:183}.
 
-\section{Branch Predictor}
-\label{ch:intro:motivation}
+\section{Branch Prediction}
+\label{ch:intro:branch_prediction}
 
-XXXXXXXXXXXXXXXXXXXX
-
-\section{Reorder Buffer}
-\label{ch:intro:motivation}
-
-XXXXXXXXXXXXXXXXXXXX
-
-\section{Address Spaces}
-\label{ch:intro:motivation}
-
-XXXXXXXXXXXXXXXXXXXX
-
-\section{Out-Of-Order Execution}
-\label{ch:intro:motivation}
-
-XXXXXXXXXXXXXXXXXXXX
+Branch prediction is a feature of processors used to guess the result of a conditional branch in a sequence of program instructions to gain performance boosts~\cite{smith1995microarchitecture}.
+So called \textit{branch predictors} analyse static information, e.g. opcode types, or dynamic program information, e.g. the branch history, to predict the result of these conditional branches.
+The prediction decides if the instructions following the branch condition should be executed or not.
+If the guess is correct performance improvements are gained because following statements can be executed in advance 
+while the condition is evaluated.
 
 %%%
 \chapter{Meltdown versus Spectre}
@@ -206,6 +202,15 @@ XXXXXXXXXXXXXXXXXXXX
 \subsection{Vulnerable Processors}
 \label{ch:intro:motivation:A}
 
+~\cite{kocher2018spectre}~\cite{lipp2018meltdown}~\cite{hennessy2011computer}
+XXXXXXXXXXXXXXXXXXXX
+
+XXXXXXXXXXXXXXXXXXXX
+\footnote{https://github.com/IAIK/meltdown/tree/master/libkdump}
+XXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXX
 
 %%%
