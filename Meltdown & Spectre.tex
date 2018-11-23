@@ -127,13 +127,13 @@ The memory of a computer is divided into \textit{cache lines} which can be store
 access of frequently used memory locations ~\cite{tanenbaum2009modern:24-27}. Because the size of a cache is limited
 cache lines have to be evicted over time depending on their frequency of usage resulting in a \textit{cache hit} if a line
 is cached, otherwise in a \textit{cache miss}. If a cache miss occurs the processor has to load data from another
-cache or from memory which takes more clock cycles the deeper .
+cache or from memory which delays data access by a significant amount of time.
 
 \section{Out-of-order Execution}
 \label{ch:intro:motivation}
 
 Tomasulo ~\cite{tomasulo1967efficient} created an algorithm which analyses a set or \textit{window} of
-instructions and their relationships to maximize their overlapping capabilities and thus the ability to get parallelized 
+program instructions and their relationships to maximize their overlapping capabilities and thus the ability to get parallelized 
 without harming essential precedences. This allows processors to reorganize instructions so that their execution is faster 
 in comparison to the execution time with the original order.
 Succeeding instructions can be executed in parallel if preceding ones
@@ -148,31 +148,52 @@ The prediction decides if the instructions following the branch condition should
 If the guess is correct performance improvements are gained because following statements can be executed in advance 
 while the condition is evaluated.
 
+\section{Transient Instructions}
+\label{ch:intro:branch_prediction}
+
+As already mentioned above out-of-order execution reorders program instructions to accelerate CPU performance.
+If an instruction is executed in advance because of out-of-order execution, e.g. when a branch condition is predicted incorrectly by the branch predictor, 
+then the speculatively executed instruction is called a \textit{transient instruction} ~\cite{lipp2018meltdown, kocher2018spectre}.
+When the CPU detects that a transient instruction was executed it inverts its effects by dismissing results and resetting the state of affected registers.
+We will see in Chapter 3 that modern processors do not remove all traces of such transient instructions and thus enable
+Meltdown and Spectre attacks.
+
+This Chapter introduced some fundamentals which are needed for understanding Meltdown and Spectre as well as their 
+effects on the architectural state of the CPU and the operating system. The next Chapter will show how these parts
+are connected in the context of the exploits.
+
 %%%
 \chapter{Meltdown versus Spectre}
 \label{ch:contentI}
 %%%
 
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
+The following chapter deals with the common traits and differences of Meltdown and Spectre based on the
+ original papers ~\cite{lipp2018meltdown, kocher2018spectre}. This chapter highlights why the exploits are related
+ and shows how they use different techniques to achieve 
+ 
+ 
+ \section{Differences in Brief}
+ \label{ch:intro:motivation}
+ 
 
-\section{Differences in Brief}
-\label{ch:intro:motivation}
 
-XXXXXXXXXXXXXXXXXXXX
+ Meltdown and Spectre share 
+ 
+ Meltdown allows to circumvent the process isolation of Intel processors and thereby reading memory of kernel processes. 
+It evokes 
 
+
+ Spectre 
+ 
 \section{What Unites Them?}
 \label{ch:intro:motivation}
 
 XXXXXXXXXXXXXXXXXXXX
 
-\subsection{Out-Of-Order Execution}
+\subsection{Out-of-order Execution and Transient Instructions}
 \label{ch:intro:motivation:A}
 
-XXXXXXXXXXXXXXXXXXXX
+
 
 \subsection{Covert Channels}
 \label{ch:intro:motivation:A}
