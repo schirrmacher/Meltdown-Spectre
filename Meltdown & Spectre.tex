@@ -179,7 +179,7 @@ The following chapter deals with the common features and differences of Meltdown
  other processes by analyzing side channel information of the CPU's cache. 
   Meltdown enables an attacker to read memory of kernel and user processes
   in contrast to Spectre which just allows to dump memory of user processes. Spectre affects all modern processors like Intel, AMD, and ARM while Meltdown
- is only exploitable on Intel processors. The challenge of Spectre is that it has to be adapted for specific programs under attack, 
+ is only exploitable on Intel processors. The challenge of Spectre is that it has to be adapted for specific programs under attack. 
  Meltdown on the other hand is a more general approach with regard to its implementation. The following sections compare Meltdown and Spectre in depth.
  
 \section{What Unites Them?}
@@ -191,7 +191,7 @@ creating so called \textit{covert channels} to reveal secret data. Although they
 manipulate the cache, as we will see in chapter 3.3, both attacks misuse the design of modern processors
 by analyzing traces of \textit{microarchitectural state} changes. 
 
-\subsection{Microarchitectural CPU State}
+\subsection{Observing Microarchitectural CPU State}
 \label{ch:intro:motivation:A}
 
 When a transient instruction is executed the microarchitectural state of a CPU is altered, e.g. registers are filled with results
@@ -199,27 +199,41 @@ of the instruction. When the CPU detects that the speculatively executed instruc
 changes as already mentioned. So from the outer architectural view processors behave correctly. 
 Despite modern processors do not eliminate all microarchitectural state changes properly so that the execution of a transient instruction
  leaves a persistent trace. In the case of Meltdown and Spectre the cache is altered with speculatively executed instructions. 
- This microarchitectural state change is not vanished by modern CPUs which leads to the creation of \textit{cache attacks} ~\cite{osvik2006cache}.
+ The resulting microarchitectural state change is not vanished by modern CPUs which leads to the birth of \textit{cache attacks} ~\cite{osvik2006cache}.
 
- \subsection{Cache Attacks and Covert Channels}
+ \subsection{Building Covert Channels}
 \label{ch:intro:motivation:A}
 
 Side-channel attacks use physical channels like power consumption or timing behavior of programs to
 leak secret data. Meltdown and Spectre are side-channel attacks, more precisely cache attacks, utilizing the timing behavior of the cache.
 The idea of the exploits is to read secret bytes from other processes within a transient instruction and to
 observe the microarchitectural state of the cache. By seeing which cache line of memory is cached the secret bytes
-can be extracted from the microarchitectural state. So the cache acts as a covert channel making the inner workings of the CPU visible to the outside world.
+can be extracted from the microarchitectural state as highlighted in the next section. 
+So the cache acts as a covert channel making the inner workings of the CPU visible to the outside world.
 
-\subsection{XXX}
+\subsection{Process of Revealing Secret Data}
 \label{ch:intro:motivation:A}
 
-Meltdown and Spectre exploit the execution of transient instructions by accessing invalid memory locations of other processes
-which are usually protected by the CPU and the operating system.
+Meltdown and Spectre exploit the execution of transient instructions by accessing invalid memory locations 
+of other processes which are usually protected by the CPU and the operating system.
 The memory access within the transient instruction depends on a secret byte which the attacker wants to reveal. 
 The CPU loads the secret byte to dynamically calculate the memory location
-and vanishes the invalid accessed data from its current state when the incorrect action is detected.
-But the microarchitectural state of the cache is unchanged and thus leaves a trace in the cache. Meltdown and Spectre
-try to reveal the secret by using cache attacks like 
+and vanishes the invalid accessed data from its current state when the illegal action is detected.
+But the microarchitectural state of the cache is unchanged and thus leaves a trace of the secret byte. 
+Meltdown and Spectre instrumenting techniques like Flush+Reload ~\cite{yarom2014flush} 
+or Evict+Reload ~\cite{gruss2015cache} to reveal the secret by analyzing the timing behavior of the memory access.
+If a memory location is cached it is loaded significantly faster into a register of the CPU than data loaded
+from memory. 
+
+Both attacks work like explained in the following:
+We have to create an array with as many elements
+as the size of a byte and load a single element from the array depending on the secret by adding it to 
+the starting position of the array. Thus the secret represents the offset of the target element 
+which will be accessed. If we can identify the accessed element we know the secret value because it equals
+the index of the accessed element. Since memory is cached when being read and the processor does not clean 
+the cache state after an illegal memory access we just have to search the cached element 
+for extracting the secret value. In chapter 4 this process is examined in detail with the help of the 
+implementation of both attacks.
 
 \section{What Divides Them?}
 \label{ch:intro:motivation}
