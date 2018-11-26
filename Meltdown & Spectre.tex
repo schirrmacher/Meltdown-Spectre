@@ -253,21 +253,25 @@ Adding to this the implementation of Spectre is more specific because it require
  Spectre use different implementation details regarding the usage of transient instructions. 
  All these details will be examined in the following.
 
-\subsection{Meltdown and the Usage of Exceptions}
+\subsection{Dealing with Exceptions}
 \label{ch:intro:motivation:A}
 
 As explained above Meltdown and Spectre try to manipulate the cache with the help of transient instructions. 
 When a CPU detects illegal memory access within such instructions a fatal error is raised and the program of the attacker
-is terminated. Therefore Meltdown has two concepts of avoiding traps: exception suppression and exception handling.
+is terminated. Therefore Meltdown has two concepts of avoiding crashes: \textit{exception handling} and \textit{exception suppression}.
 
-Exception suppression is the process of preventing errors 
+Exception handling is the process of catching the error. Meltdown uses two techniques to catch errors: defining signal handlers
+which are executed in case of a segmentation fault or by creating child processes which are rolled back on error.
+The latter is just applicable to Intel TSX processors where transient instructions can be grouped and reversed a whole after failing.
 
-\subsection{Spectre and the Usage of Branching}
-\label{ch:intro:motivation:A}
+Exception suppression is the process of preventing that an error is raised. This can be done by putting the illegal memory access
+within a branch condition. The goal is to trick the branch predictor so that the condition evaluates to be true.
+Then the transient instruction is executed without raising an error and silently vanished when the CPU detects that the branch
+condition was falsely evaluated but still leaving exploitable traces in the cache.
 
-XXXXXXXXXXXXXXXXXXXX
+Spectre just utilizes the mistraining of the branch predictor so the exploit is only based on exception suppression.
 
-\subsection{Vulnerable Processors}
+\subsection{Adaptability}
 \label{ch:intro:motivation:A}
 
 XXXXXXXXXXXXXXXXXXXX
