@@ -178,7 +178,7 @@ The following chapter deals with the common features and differences of Meltdown
  Meltdown and Spectre both misuse out-of-order execution and transient instructions as techniques to access memory of 
  other processes by analyzing side channel information of the CPU's cache. 
   Meltdown enables an attacker to read memory of kernel and user processes
-  in contrast to Spectre which just allows to dump memory of user processes. Spectre affects all modern processors like Intel, AMD, and ARM while Meltdown
+  in contrast to Spectre which just allows to dump memory of sandboxes or other user processes. Spectre affects all modern processors like Intel, AMD, and ARM while Meltdown
  is only exploitable on Intel processors. The challenge of Spectre is that it has to be adapted for specific programs under attack. 
  Meltdown on the other hand is a more general approach with regard to its implementation. The following sections compare Meltdown and Spectre in depth.
  
@@ -187,8 +187,8 @@ The following chapter deals with the common features and differences of Meltdown
 
 This section deals with the common features of Meltdown and Spectre in detail. 
 Both attacks use out-of-order execution and transient instructions to manipulate the cache of a CPU and thereby
-creating so called \textit{covert channels} to reveal secret data. Although they apply different techniques to 
-manipulate the cache, as we will see in chapter 3.3, both attacks misuse the design of modern processors
+creating so called \textit{covert channels} to reveal secret data. Although they apply different techniques, 
+as we will see in chapter 3.3, both attacks misuse the design of modern processors
 by analyzing traces of \textit{microarchitectural state} changes. 
 
 \subsection{Usage of Transient Instructions}
@@ -208,39 +208,50 @@ Side-channel attacks use physical channels like power consumption or timing beha
 leak secret data. Meltdown and Spectre are side-channel attacks, more precisely \textit{cache attacks}, 
 utilizing the timing behavior of the cache ~\cite{osvik2006cache}.
 
-The core idea of the attacks is to execute transient instructions which access data of their own address space
- but interweave the access location with an unknown secret byte from another process. 
- When the CPU loads the secret byte to dynamically calculate the target memory location 
+The core idea of the attacks is to execute transient instructions 
+which access memory by interweaving the access location with an unknown secret byte from another protected context. 
+When the CPU loads the secret byte to dynamically calculate the target access location 
 it detects that the instruction is transient and vanishes the secret byte and the result of the final memory location from its state. 
 Though the access instruction was executed in advance, before the CPU detects that it is transient, the microarchitectural state
  of the CPU is already altered.
- Since memory locations are cached when being read and the processor does not clean its microarchitectural state properly.
- Now we just have to detect which memory location has been cached to recreate the secret byte.
+ Since memory locations are cached when being read and the processor does not clean its microarchitectural state properly,
+ we just have to detect which memory location has been cached to recreate the secret byte.
  Meltdown and Spectre instrumenting techniques like Flush+Reload ~\cite{yarom2014flush} 
- or Evict+Reload ~\cite{gruss2015cache} which analyze the timing behavior of accessing each element of the array 
- to find out which element has been cached.
- So the cache acts as a covert channel making the inner workings of the CPU visible to the outside world.
+ or Evict+Reload ~\cite{gruss2015cache} to find out the cached memory location depending on the secret byte.
+These techniques load many locations from memory and measure how much time the access takes to detect cached lines.
+
+Flush+Reload cleans the cache by using 
+
+Evict+Reload: XXX
+
+ So for both attacks the cache acts as a covert channel making the inner workings of the CPU visible to the outside world.
 
 \subsection{Process of Revealing Secret Data}
 \label{ch:intro:motivation:A}
 
-Meltdown and Spectre exploit the execution of transient instructions by accessing bytes of address spaces 
-from other processes which are usually protected by the CPU and the operating system. 
+Meltdown and Spectre exploit the execution of transient instructions by accessing bytes of memory contexts 
+ which are usually protected by the CPU, the operating system or sandboxes. 
 
-For revealing a secret byte an array with as many elements as the size of a byte has to be initialized in the attackers address space. 
-The next step is to load an element of the array from a position which depends on the secret byte. 
-More precisely the target access location is calculated by adding the secret byte to the starting position of the array and
- thus it represents the offset of the target element which will be accessed. As mentioned earlier elements accessed within the transient
- instruction will be cached when being read by the processor. 
- Besides a cached element is loaded significantly faster into a register of the CPU than accessed from memory.
- 
-If we check every element of the array for being cached with the techniques mentioned above we reveal the secret byte 
- because it is equal to the position of the accessed element.
-This process can be executed iteratively to reveal the whole address space of other processes. 
-In chapter 4 this process is examined in detail with the help of the implementation of both attacks.
+For revealing a secret byte two registers, R1 and R2, must be under control of the attacker. The contents of these registers have to be 
+combined with a reversible operation like add, subtract or XOR. Besides an array, the so called \textit{probe array}, has to be 
+initialized in the attacker's address space with the size of 256, i.e. byte size, times the size of a memory page. This array will 
+reveal the secret as explained below.
 
-This chapter highlighted the common techniques of Meltdown and Spectre and how they can be used to reveal secret bytes from other
-processes. The next chapter will focus on the differences of the exploits.
+The transient instruction consists of the following steps:
+The attacker loads the base address of the probe array into R1 and combines it with a secret byte loaded into R2. 
+Then the element of the probe array at the resulting address, e.g. R1+R2, has to be accessed by the malicious instruction sequence.
+Thus the secret byte in R2 can be seen as the offset location which points to one of the 256 elements of the probe array.
+
+The next step after executing the transient instruction is to find the element of the probe array which has been cached by the processor
+because this must be the accessed element.
+A cached element is loaded significantly faster into a register of the CPU than accessed from memory.
+If every element of the probe array is checked for being cached by utilizing techniques like Flush+Reload or Evict+Reload it is possible
+to reveal the secret byte because it matches the position of the cached element.
+This process can be executed iteratively to reveal many secret bytes from protected contexts. Its important to mention that this exploit
+applied by Meltdown and Spectre can also be realized with high level languages like JavaScript.
+
+This chapter highlighted the common techniques of Meltdown and Spectre and how they can be used to access protected memory.
+The next chapter will focus on the differences of the exploits.
 
 \section{What Divides Them?}
 \label{ch:intro:motivation}
@@ -271,10 +282,13 @@ condition was falsely evaluated but still leaving exploitable traces in the cach
 
 Spectre just utilizes the mistraining of the branch predictor so the exploit is only based on exception suppression.
 
-\subsection{Adaptability}
+\subsection{Complexity and Impact}
 \label{ch:intro:motivation:A}
 
-XXXXXXXXXXXXXXXXXXXX
+Privilege escalation?
+Implementation complexity?
+What is exploitable?
+Which processors?
 
 %%%
 \chapter{Source Code Analysis}
