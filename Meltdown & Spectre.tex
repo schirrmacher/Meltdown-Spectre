@@ -176,7 +176,7 @@ The following chapter deals with the common features and differences of Meltdown
  \label{ch:intro:motivation}
  
  Meltdown and Spectre both misuse out-of-order execution and transient instructions as techniques to access memory of 
- other processes by analyzing side channel information of the CPU's cache. 
+ other contexts by analyzing side channel information of the CPU's cache. 
   Meltdown enables an attacker to read memory of kernel and user processes
   in contrast to Spectre which just allows to dump memory of sandboxes or other user processes. Spectre affects all modern processors like Intel, AMD, and ARM while Meltdown
  is only exploitable on Intel processors. The challenge of Spectre is that it has to be adapted for specific programs under attack. 
@@ -220,7 +220,7 @@ Though the access instruction was executed in advance, before the CPU detects th
  or Evict+Reload ~\cite{gruss2015cache} to find out the cached memory location depending on the secret byte.
 These techniques load many locations from memory and measure how much time the access takes to detect cached lines.
 
-Flush+Reload cleans the cache by using 
+Flush+Reload cleans the cache with intrinsic CPU instructions and reloads a target value wh 
 
 Evict+Reload: XXX
 
