@@ -220,14 +220,15 @@ Though the access instruction was executed in advance, before the CPU detects th
  or Evict+Reload ~\cite{gruss2015cache} to find out the cached memory location depending on the secret byte.
 These techniques load many locations from memory and measure how much time the access takes to detect cached lines.
 
-Flush+Reload flushes the cache lines of the attacker's process with intrinsic CPU instructions and reloads a target value.
-After flushing the reloaded element can be detected by measuring the access time which is significantly smaller than the access
-of flushed elements which are retrieved from memory.
+Flush+Reload flushes the cache lines of the attacker's process with intrinsic CPU instructions and reloads a target memory location.
+The reloaded and thereby cached location can be detected by measuring the access time which is significantly smaller than the access
+time of flushed locations.
 Evict+Reload works similarly to Flush+Reload but instead of flushing the cache it accesses many uncached memory
 locations so that cached ones are evicted from the cache.
-This technique is useful when the flush instruction is not available, e.g. for the JavaScript implementation of Spectre. 
+This technique is useful when the flush instruction is not available, e.g. for high level JavaScript implementations of Spectre. 
 
- So for both attacks the cache acts as a covert channel making the inner workings of the CPU visible to the outside world.
+For both attacks the cache acts as a covert channel making the inner workings of the CPU visible to the outside world. 
+The next section explains the details of revealing secret data with the mentioned techniques. 
 
 \subsection{Process of Revealing Secret Data}
 \label{ch:intro:motivation:A}
@@ -238,9 +239,9 @@ Meltdown and Spectre exploit the execution of transient instructions by accessin
 For revealing a secret byte two registers, R1 and R2, must be under control of the attacker. The contents of these registers have to be 
 combined with a reversible operation like add, subtract or XOR. Besides an array, the so called \textit{probe array}, has to be 
 initialized in the attacker's address space with the size of 256, i.e. byte size, times the size of a memory page. This array will 
-reveal the secret as explained below.
+reveal secret bytes as explained below.
 
-The transient instruction consists of the following steps:
+The transient instructions of Meltdown and Spectre consist of the following steps:
 The attacker loads the base address of the probe array into R1 and combines it with a secret byte loaded into R2. 
 Then the element of the probe array at the resulting address, e.g. R1+R2, has to be accessed by the malicious instruction sequence.
 Thus the secret byte in R2 can be seen as the offset location which points to one of the 256 elements of the probe array.
@@ -262,8 +263,8 @@ The next chapter will focus on the differences of the exploits.
 This chapter deals with the differences of Meltdown and Spectre. As mentioned above Meltdown enables an attacker 
 to dump the memory of kernel and user processes. On the other hand Spectre can just be utilized to read protected memory within 
 the same process (sandboxes) or of other user processes.
-Adding to this the implementation of Spectre is more specific because it requires adaptation to the attacked process 
-, e.g. by analyzing the binaries a program uses. Meltdown is a more general approach with the limitation that it just works on Intel
+Adding to this the implementation of Spectre is more specific because it requires adaptation to the attacked process,
+ e.g. by analyzing the binaries a program uses. Meltdown is a more general approach with the limitation that it just works on Intel
  processors in contrast to Spectre which is applicable on all modern processors like Intel, AMD, and ARM. Furthermore Meltdown and 
  Spectre use different implementation details regarding the usage of transient instructions. 
  All these details will be examined in the following.
@@ -277,7 +278,7 @@ is terminated. Therefore Meltdown has two concepts of avoiding crashes: \textit{
 
 Exception handling is the process of catching raised errors. Meltdown uses two techniques to catch errors: defining signal handlers
 which are executed in case of a segmentation fault or by creating child processes which are rolled back on error.
-The latter is just applicable to Intel TSX processors where transient instructions can be grouped and reversed as a whole after failing.
+The latter is just applicable on Intel TSX processors where transient instructions can be grouped and reversed as a whole after failing.
 
 Exception suppression is the process of preventing that an error is raised. This can be done by putting the illegal memory access
 within a branch condition. The goal is to trick the branch predictor so that the condition is predicted incorrectly and the following
@@ -285,7 +286,6 @@ instructions are speculatively executed.
 Then errors do not terminate the attacker's process instead the CPU silently vanishes their results
  but still leaves exploitable traces in the cache.
 Meltdown misuses the race condition of the CPU between raising the error and cleaning it's microarchitectural state. 
-This short time window between those steps is utilized by the cache attack.
 
 The Spectre attack does not need to catch segmentation faults because it just tricks the branch predictor to access secret data. 
 Hence the exploit is only based on exception suppression.
@@ -295,13 +295,24 @@ Hence the exploit is only based on exception suppression.
 
 Since Meltdown circumvents the raise of segmentation faults it enables the attacker to read secret bytes even from the kernel address space.
 Thus Meltdown breaks the isolation of the malicious program and achieves privilege escalation. 
-On the other hand Spectre 
+On the other hand Spectre just tries to read legal memory locations. Hence it does not achieve privilege escalation and just can read
+protected memory from the same process. 
+Despite it can reveal memory of other user processes because the branch predictor can be manipulated in the 
+context of the attacker program and at the same time affecting the branch prediction within other contexts, i.e other processes.
+So the attacker has to search for \textit{gadgets} within the binaries of the victim program which access data the attacker wants to reveal.
+These gadgets should follow a branch condition so that the exploit is applicable.
+If the branch predictor is tricked the victim's process will execute the instructions of the gadget which then influence the cache 
+and enable the above-mentioned techniques. 
+This shows that Spectre is more complex than Meltdown if memory of other processes should be dumped. 
+If the attacker wants to read memory of the same process Spectre is as simple as Meltdown because the binaries of the victim program
+can be neglected.
 
+The most important difference between Meltdown and Spectre is that the former is only applicable on Intel processors while Spectre 
+also affects AMD and ARM processors. The reason for that is not known by the researchers but it might be possible that current 
+implementations of Meltdown are not perfectly optimized.
 
-Privilege escalation?
-Implementation complexity?
-What is exploitable?
-Which processors?
+This chapter highlighted the differences between Meltdown and Spectre to get a deeper understanding of the exploits.
+Now the foundation for the next chapter is given so that implementations of the attacks can be presented.
 
 %%%
 \chapter{Source Code Analysis}
