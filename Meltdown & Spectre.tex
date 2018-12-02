@@ -448,7 +448,7 @@ to manipulate the branch predictor.
  
 This section illustrates how Spectre creates a covert channel with Flush+Reload. 
 In listing ~\ref{lst:victim} the flush part of the Flush+Reload attack is shown. It utilizes the intrinsic instruction 
-\texttt{\_mm\_clflush} ~\cite{intelintrinsics} to clean the probe array from the cache. This part resets the cache state
+\texttt{\_mm\_clflush} ~\cite{intelintrinsics} to clean the probe array \texttt{array2} from the cache. This part resets the cache state
 so that time measurements can be conducted afterwards. If Spectre is implemented in high level languages like JavaScript it
 might be the case that \texttt{\_mm\_clflush} is not available as a function call. Then other techniques like Evict+Reload have
 to be applied.
@@ -470,7 +470,7 @@ copies the CPU's time-stamp counter. High precision timers are crucial for the a
 Google Chrome reduced the precision of the \texttt{performance.now()} function to mitigate Spectre attacks ~\cite{chromeSpectreMeltdown}.
 To distinguish a cached memory location from an uncached one it is necessary to compute the value \texttt{CACHE\_HIT\_THRESHOLD}.
 This value has to be adapted for the CPU and can be calculated by taking the average time of many cache hits.
-If the measured access time is smaller or equal to the threshold the related index of the element is considered as a potential result.
+If the measured access time is smaller or equal to the threshold the index of the related element is considered as a potential result.
 
 \begin{lstlisting}[language=C, caption=Spectre: Reload, label={lst:reload}]
 for (i = 0; i < 256; i++)
@@ -489,12 +489,14 @@ for (i = 0; i < 256; i++)
 \subsection{Tricking the Branch Predictor}
 \label{ch:intro:motivation:A}
 
-Tricking the branch predictor is the core of the Spectre attack. Listing ~\ref{lst:twiddling} 
+Tricking the branch predictor is the core of the Spectre attack. Listing ~\ref{lst:twiddling} contains instructions which
+ set the value of a variable \texttt{x} within a for-loop to confuse the branch predictor.
+The variable \texttt{x} represents the access location of an array which is the starting point for malicious memory access.
+The idea is to fill \texttt{x} over many iterations with valid locations so that the branch predictor believes
+that it's value is within the array bounds. But in some of the iterations \texttt{x} is set to an invalid memory location
+which is out of the array bounds where the secret bytes should be read.
 
 \begin{lstlisting}[language=C, caption=Spectre: Branch Predictor Tricking, label={lst:twiddling}]
-/* Bit twiddling to set x=training_x if j % 6 != 0 * or malicious_x if j % 6 == 0 */
-/* Avoid jumps in case those tip off the branch predictor */
-/* Set x=FFF.FF0000 if j%6==0, else x=0 */
 x = ((j % 6) - 1) & ~0xFFFF;
 /* Set x=-1 if j&6=0, else x=0 */
 x = (x | (x >> 16));
@@ -504,10 +506,21 @@ x = training_x ^ (x & (malicious_x ^ training_x));
 victim_function(x);
 \end{lstlisting}
 
+Although the instruction sequence seems complicated it just sets the value \texttt{x} to the malicious target location 
+\texttt{malicious\_x} in every 6th iteration. In every other iteration \texttt{x} is set to \texttt{training\_x}.
+Listing ~\ref{lst:simplified} shows the semantic equivalent which is not applicable for the attack because the compiled code
+contains jump instructions which give the branch predictor hints that \texttt{malicious\_x} and also \texttt{x} are invalid.
+The compiled instructions of listing ~\ref{lst:twiddling} on the other hand contain no jumps.
+
+\begin{lstlisting}[language=C, caption=Spectre: Branch Predictor Tricking Simplified, label={lst:simplified}]
+x = (j % 6 == 0) ? malicious_x : training_x;
+\end{lstlisting}
+
 Listing ~\ref{lst:victim} shows an example victim function. The goal is to trick the branch predictor so that the if condition is 
 assumed to be true even if the value \texttt{x} is out of the array bounds. The value \texttt{512} indicates the memory page size of the
-attacked program which is multiplied by the secret value of \texttt{array1}. So an element of \texttt{array2}, the probe array, is loaded
-and thus cached if the instruction is executed.
+attacked program which is multiplied by the secret value accessed through \texttt{array1}. So an element of \texttt{array2}, the probe array, is loaded
+and thus cached if the instruction in line 5 is executed. Then Flush+Reload has to be applied to identify the cached element
+and the secret byte at memory location \texttt{x}.
 
 \begin{lstlisting}[language=C, caption=Spectre: Example Victim Gadget, label={lst:victim}]
 void victim_function(size_t x)
@@ -519,8 +532,12 @@ void victim_function(size_t x)
 }
 \end{lstlisting}
 
-\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown]
-\end{lstlisting}
+It is also important that the variable \texttt{array1\_size} of listing ~\ref{lst:victim} is flushed from the cache so that out-of-order
+execution is triggered when the value has to be loaded from memory due to a cache miss so that the transient instruction within
+the branch condition can be executed in advance.
+
+To achieve good measurements with Flush+Reload the Spectre implementation uses 1000 iterations to be sure that the results
+are significant. Within these iterations the branch predictor is trained with another 30 iterations leading to a low error rate (<0.01\%).
 
 %%%
 \chapter{Countermeasures}
