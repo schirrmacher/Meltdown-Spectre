@@ -369,11 +369,6 @@ Line 4 tries to access a protected memory location from the kernel space and loa
 This action will raise an error which will be handled by techniques mentioned in the following.
 When the error is raised the microarchitectural state of the CPU, i.e. the cache, is already altered 
 by the instruction from line 7 which is executed out of order to access an element of the probe array.
-The access location is computed by adding the base address of the probe array to the content of \texttt{RAX} which 
-is the secret byte.
-Then techniques like Flush+Reload can be applied to reveal the secret byte from kernel memory.
-Line 5 shifts the content of the \texttt{RAX} register by the size of a memory page to access the next element of the probe array.
-This is necessary to ensure that the distance of the accessed elements is large enough and avoids caching of adjacent memory locations.
 
 \begin{lstlisting}[language={[x86masm]Assembler}, caption=Meltdown: Transient Instruction Sequence, label={lst:meltdown}]
 ; rcx = kernel address
@@ -385,10 +380,16 @@ jz retry
 mov rbx, qword [rbx + rax]
 \end{lstlisting}
 
+The access location is computed by adding the base address of the probe array to the content of \texttt{RAX} which 
+is the secret byte multiplied by the size of a memory page in line 5.
+This is necessary to ensure that the distance of the accessed elements is large enough and to avoid caching of adjacent memory locations.
+After execution of line 7 techniques like Flush+Reload or Evict+Reload can be applied to reveal the secret byte from kernel memory.
+
+
 \subsection{Dealing with Exceptions}
 \label{ch:intro:motivation:A}
 
-\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown, label={lst:reload}]
+\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown, label={lst:signal}]
 static void unblock_signal(int signum __attribute__((__unused__))) {
     sigset_t sigs;
     sigemptyset(&sigs);
@@ -397,7 +398,22 @@ static void unblock_signal(int signum __attribute__((__unused__))) {
 }
 \end{lstlisting}
 
-\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown, label={lst:reload}]
+\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown, label={lst:tsx}]
+    
+\end{lstlisting}
+
+\subsection{Building a Covert Channel}
+\label{ch:intro:motivation:A}
+
+Listing ~\ref{lst:flushAndReload} contains the Flush+Reload implementation of Meltdown. 
+The reload instruction of the pointer \texttt{ptr} in line 5 is wrapped 
+by time measurements utilizing the intrinsic instruction for reading the time-stamp counter of the CPU ~\cite{intelintrinsics}. 
+Depending on the measured time the value is assumed to be cached if it is smaller
+than the \texttt{cache\_miss\_threshold} which has to be calculated in advance.
+In line 8 \texttt{ptr} is flushed with an underlying intrinsic instruction called \texttt{clflush} ~\cite{intelintrinsics}
+so that it no longer resides in the cache.
+
+\begin{lstlisting}[language=C, caption=Meltdown: Flush+Reload, label={lst:flushAndReload}]
 static int __attribute__((always_inline)) flush_reload(void *ptr) {
     uint64_t start = 0, end = 0;
   
