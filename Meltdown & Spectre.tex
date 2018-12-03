@@ -350,35 +350,45 @@ Now the foundation for the next chapter is given so that implementations of the 
 %%%
 
 This chapter shows example implementations of Meltdown and Spectre created by the researchers of the original papers.
-The implementations will highlight how the explained techniques work in detail.
+The implementations will highlight how the exploits work in detail.
 
 \section{Meltdown Implementation}
 \label{ch:intro:motivation}
 
 This section deals with the implementation of Meltdown\footnote{https://github.com/IAIK/meltdown/tree/master/libkdump} applying
-Flush+Reload to build a covert channel. Just the core functionality of the implementation is focused and
-the building blocks of the exploit are examined gradually.
+Flush+Reload to build a covert channel. The focus of the following is just on the core functionality of the implementation.
 
 \subsection{Transient Instruction Sequence}
 \label{ch:intro:motivation:A}
 
-\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown]
-  #define meltdown\
-  asm volatile("1:\n"\
-               "movq (%%rsi), %%rsi\n"\
-               "movzx (%%rcx), %%rax\n"\
-               "shl $12, %%rax\n"\
-               "jz 1b\n"\
-               "movq (%%rbx,%%rax,1), %%rbx\n"\
-               :\
-               : "c"(phys), "b"(mem), "S"(0)\
-               : "rax");
+Listing ~\ref{lst:meltdown} shows the x86 assembly implementation of the transient instruction sequence
+which enables the Meltdown exploit.
+Like explained above the probe array has to be initialized with 256 page sized elements.
+\texttt{RBX} contains the base address of the probe array.
+Line 4 tries to access a protected memory location from the kernel space and loads the result into \texttt{RAX}. 
+This action will raise an error which will be handled by techniques mentioned in the following.
+When the error is raised the microarchitectural state of the CPU, i.e. the cache, is already altered 
+by the instruction from line 7 which is executed out of order to access an element of the probe array.
+The access location is computed by adding the base address of the probe array to the content of \texttt{RAX} which 
+is the secret byte.
+Then techniques like Flush+Reload can be applied to reveal the secret byte from kernel memory.
+Line 5 shifts the content of the \texttt{RAX} register by the size of a memory page to access the next element of the probe array.
+This is necessary to ensure that the distance of the accessed elements is large enough and avoids caching of adjacent memory locations.
+
+\begin{lstlisting}[language={[x86masm]Assembler}, caption=Meltdown: Transient Instruction Sequence, label={lst:meltdown}]
+; rcx = kernel address
+; rbx = probe array
+retry:
+mov al, byte [rcx]
+shl rax, 0xc
+jz retry
+mov rbx, qword [rbx + rax]
 \end{lstlisting}
 
 \subsection{Dealing with Exceptions}
 \label{ch:intro:motivation:A}
 
-\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown]
+\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown, label={lst:reload}]
 static void unblock_signal(int signum __attribute__((__unused__))) {
     sigset_t sigs;
     sigemptyset(&sigs);
@@ -387,7 +397,7 @@ static void unblock_signal(int signum __attribute__((__unused__))) {
 }
 \end{lstlisting}
 
-\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown]
+\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown, label={lst:reload}]
 static int __attribute__((always_inline)) flush_reload(void *ptr) {
     uint64_t start = 0, end = 0;
   
@@ -407,7 +417,7 @@ static int __attribute__((always_inline)) flush_reload(void *ptr) {
 \subsection{Covert Channel Creation}
 \label{ch:intro:motivation:A}
 
-\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown]
+\begin{lstlisting}[language=C, caption=Meltdown: XXX, label={lst:reload}]
 int __attribute__((optimize("-Os"), noinline)) libkdump_read_signal_handler() {
     size_t retries = config.retries + 1;
     uint64_t start = 0, end = 0;
@@ -443,7 +453,7 @@ XXXXXXXXXXXXXXXXXXXX
 This chapter examines an example C++ implementation of Spectre which also applies Flush+Reload and some advanced techniques
 to manipulate the branch predictor.
 
-\subsection{Covert Channel}
+\subsection{Building a Covert Channel}
 \label{ch:intro:motivation:A}
  
 This section illustrates how Spectre creates a covert channel with Flush+Reload. 
@@ -510,7 +520,7 @@ Although the instruction sequence seems complicated it just sets the value \text
 \texttt{malicious\_x} in every 6th iteration. In every other iteration \texttt{x} is set to \texttt{training\_x}.
 Listing ~\ref{lst:simplified} shows the semantic equivalent which is not applicable for the attack because the compiled code
 contains jump instructions which give the branch predictor hints that \texttt{malicious\_x} and also \texttt{x} are invalid.
-The compiled instructions of listing ~\ref{lst:twiddling} on the other hand contain no jumps.
+The source code of listing ~\ref{lst:twiddling} is optimized so that the compiled instructions contain no jumps.
 
 \begin{lstlisting}[language=C, caption=Spectre: Branch Predictor Tricking Simplified, label={lst:simplified}]
 x = (j % 6 == 0) ? malicious_x : training_x;
@@ -537,7 +547,8 @@ execution is triggered when the value has to be loaded from memory due to a cach
 the branch condition can be executed in advance.
 
 To achieve good measurements with Flush+Reload the Spectre implementation uses 1000 iterations to be sure that the results
-are significant. Within these iterations the branch predictor is trained with another 30 iterations leading to a low error rate (<0.01\%).
+are significant. Within these iterations the branch predictor is trained with another 30 iterations leading to a low error rate (<0.01\%)
+of reading secret bytes from protected contexts.
 
 %%%
 \chapter{Countermeasures}
