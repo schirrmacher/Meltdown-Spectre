@@ -656,29 +656,66 @@ of reading secret bytes from protected contexts.
 \label{ch:countermeasures}
 %%%
 
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
+This chapter deals with a short overview of countermeasures mitigating Meltdown and Spectre. 
+Although the fundamental design of modern processors enables the exploits there are still techniques to impede
+the attacks.
 
 \section{Meltdown}
 \label{ch:intro:motivation}
 
+Because the Meltdown exploit is based on fundamental CPU design issues it requires radical changes regarding instruction execution.
+One option to prevent Meltdown is to disable out-of-order execution which would result in a massive slow-down of CPU performance.
+Another way is to prevent the race condition between errors and illegal memory fetches. This is possible by serializing instructions
+which check the access permission and those accessing memory.
+A third option is to separate the user address space and the kernel address space so that illegal memory access is immediately
+identified by hardware without table lookups, e.g. with the help of the virtual address.
+The latter option is regarded as the most adequate because it could be realized with acceptable performance losses.
+Meltdown is a hardware based exploit so that software patches do not solve all related problems. 
+Still there is one software patch which impedes the exploit called \textit{KAISER} ~\cite{gruss2017kaslr}.
+
+\subsection{KAISER}
+\label{ch:intro:motivation}
+
+Meltdown allows to read protected memory from kernel address space because it is mapped in the user address space.
+KAISER is a software patch which separates kernel from user address space and introduces a so called \textit{shadow address space}
+to isolate kernel memory. 
+The shadow address space just contains the user address space and thus is completely isolated from the kernel address space.
+Adding to this a process has a second address space where the kernel address space is still mapped into 
+but it is reduced to the required minimum so that the attack surface is much smaller. 
+Here the user address space is protected by supervisor-mode access prevention (SMAP) 
+and supervisor-mode execution prevention (SMEP).
+
 \section{Spectre}
 \label{ch:intro:motivation}
 
-
+The problems emerging due to the design issues of modern processors make it difficult to prevent Meltdown and Spectre 
+as well without performance degradations.
+One option to mitigate Spectre is to disable speculative execution. 
+Modern processors do not support modes for disabling speculative execution. 
+Moreover the performance of processors would be affected severely.
+A second option is to prevent that secret data can be accessed by speculatively executed instructions. 
+This can be done by protecting access to pointers with the help of type checks 
+so that the access through a pointer to another type is prevented.
+Another option is to identify memory which is accessed by speculative instructions and to prevent that subsequent
+instructions can reveal it.
+Besides cache attacks like Flush+Reload can be impeded by reducing the precision of time-stamp counters as already mentioned.
+The last option is to mitigate indirect branch poisoning which enables manipulation of the branch predictor in other contexts.
+This can be done by software patches like \textit{retpolines} ~\cite{retpoline}.
 %%%
 \chapter{Conclusion}
 \label{ch:conclusion}
 %%%
 
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXX
+This work presented Meltdown and Spectre with a detailed comparison and example implementations to give 
+an overview of the attacks and their implications. 
+The exploits demonstrate how the leakage of small traces within a processor lead to powerful side-channel attacks
+which threaten the modern world of computing. 
+Meltdown and Spectre introduce a new chapter in the world of side-channel attacks affecting mobile phones, laptops, browsers and 
+many other areas like cloud computing.
+Both attacks highlight the urgency for overthinking current processor designs and demonstrate that there is a tradeoff between
+fast and secure processors.
+Even though there are software solutions like KAISER to impede some issues, hardware solutions are inevitable for long-term 
+security of computing.
 
 \lstlistoflistings
 
