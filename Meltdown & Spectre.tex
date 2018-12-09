@@ -134,59 +134,78 @@ and should be able to distinguish their traits and impact on modern computing.
 
 This chapter introduces some basics which are needed to understand and create implementations of Meltdown and Spectre. 
 All parts of this chapter are presented isolated and not in the context of the exploits. 
-Rather their connection and purpose is highlighted in chapters 3 and 4.
+Rather their connection and purpose is highlighted in chapters ~\ref{ch:meltdownVersusSpectre} and ~\ref{ch:sourceCodeAnalysis}.
 
-\section{Processes, Address Spaces and Caching}
+\section{Processes and Address Spaces}
 \label{ch:intro:motivation}
 
 Operating systems use processes as an abstraction to handle execution of multiple programs at the same time
- and managing their associated resources like address spaces, registers, list of open files, 
+ and for managing their associated resources like address spaces, registers, list of open files, 
  out-standing alarms and lists of related processes ~\cite{tanenbaum2009modern:39-41}. 
-CPU hardware ensures that processes of the operating system, \textit{kernel processes},  and processes of users are protected from each other 
-by generating isolated address spaces for each process 
-and preventing mutual modification or illegal access of data ~\cite{silberschatz2012operating}.
+CPU hardware ensures that processes of the operating system, \textit{kernel processes}, 
+and user processes, e.g. regular applications, are protected from each other by generating isolated address spaces for each process 
+and preventing modification or illegal access of their resources ~\cite{silberschatz2012operating}.
+Memory isolation is the core feature for securing sensitive data of programs running on the same machine.
 
-Every illegal operation of a process trying to circumvent these isolation boundaries results in a 
-fatal error, called \textit{trap}, which must be handled by the operating system. Memory separation is realized 
-with the help of \textit{virtual address spaces} which are further divided into fixed-size \textit{pages} 
-which are mapped into \textit{physical address space} by page tables ~\cite{hennessy2011computer:105-107}. 
-A page table knows which process is allowed to access a specific page and thus it serves as
- a restriction mechanism to monitor and control illegal memory access.
+Memory isolation is realized with the help of \textit{virtual address spaces} 
+which are mapped into \textit{physical address space}, i.e. the actual memory location.
+Processes can only access memory which is mapped into their own virtual address space.
+So called \textit{page tables} check access permission of a process to a given memory location ~\cite{hennessy2011computer:105-107}.
+Virtual address spaces are further divided into fixed-size \textit{pages} which form small blocks of memory.
+Page tables know which process is allowed to access specific pages and thus serve as
+a data structure to restrict and monitor illegal memory access.
 
-The memory of a computer is divided into \textit{cache lines} which can be stored temporarily in the cache to accelerate
-access of frequently used memory locations ~\cite{tanenbaum2009modern:24-27}. Because the size of a cache is limited
-cache lines have to be evicted over time depending on their frequency of usage resulting in a \textit{cache hit} if a line
-is cached, otherwise in a \textit{cache miss}. If a cache miss occurs the processor has to load data from another
+If a process tries to circumvent these isolation boundaries by accessing protected memory a fatal error or \textit{trap}
+is raised by the operating system. A trap prompts the operating system to kill the responsible process.
+Even so there are techniques to prevent termination of a program raising errors which are utilized by the Meltdown attack.
+
+\section{Caching}
+\label{ch:intro:chaching}
+
+The cache of a computer stores small amounts of data close to the CPU which can be accessed with low latency. 
+A cache can be divided into \textit{cache lines} which hold recently used memory locations ~\cite{tanenbaum2009modern:24-27}. 
+Because the size of a cache is limited cache lines have to be evicted over time depending on their frequency 
+of usage resulting in a \textit{cache hit} if a line is cached, otherwise in a \textit{cache miss}.
+If a cache miss occurs the processor has to load data from another
 cache or from memory which delays data access by a significant amount of time.
+This notion is important for Meltdown and Spectre because the attacks apply time measurements to detect cached data. 
 
 \section{Out-of-order Execution}
 \label{ch:intro:motivation}
 
 Tomasulo ~\cite{tomasulo1967efficient} created an algorithm which analyses a set or \textit{window} of
 program instructions and their relationships to maximize their overlapping capabilities and thus the ability to get parallelized 
-without harming essential precedences. This allows processors to reorganize instructions so that their execution is faster 
-in comparison to the execution time with the original order.
+without harming essential precedences. This concept allows processors to reorganize instructions so that their execution is much faster 
+in comparison to the execution of the original order.
 Succeeding instructions can be executed in parallel if preceding ones
  have to wait for accessing memory in case of a cache miss~\cite{hennessy2011computer:183}.
+Out-of-order execution is a fundamental feature of modern processors to accelerate performance.
+Unfortunately this feature enables attacks like Meltdown and Spectre because out-of-order execution can leak sensitive information
+of protected memory locations as we will see in ~\ref{ch:meltdownVersusSpectre} and ~\ref{ch:sourceCodeAnalysis}.
 
 \section{Branch Prediction}
 \label{ch:intro:branch_prediction}
 
-Branch prediction is a feature of processors used to guess the result of a conditional branch in a sequence of program instructions to gain performance boosts~\cite{smith1995microarchitecture}.
-So called \textit{branch predictors} analyse static information, e.g. opcode types, or dynamic program information, e.g. the branch history, to predict the result of these conditional branches.
+Branch prediction is another feature of processors used to guess the result of a conditional branch in a sequence 
+of program instructions to gain performance boosts ~\cite{smith1995microarchitecture}.
+So called \textit{branch predictors} analyse static information, e.g. opcode types, or dynamic program information, 
+e.g. the branch history, to predict the result of conditional branches.
 The prediction decides if the instructions following the branch condition should be executed or not.
 If the guess is correct performance improvements are gained because following statements can be executed in advance 
-while the condition is evaluated.
+while the condition is evaluated. So branch prediction is also related to out-of-order execution.
+Branch prediction is especially relevant for Spectre which attacks branch predictors to reveal secret data of 
+protected memory locations.
 
 \section{Transient Instructions}
 \label{ch:intro:branch_prediction}
 
 As already mentioned above out-of-order execution reorders program instructions to accelerate CPU performance.
-If an instruction is mistakenly executed in advance, e.g. when a branch condition is predicted incorrectly by the branch predictor, 
-then the speculatively executed instruction is called a \textit{transient instruction} ~\cite{lipp2018meltdown, kocher2018spectre}.
-When the CPU detects that a transient instruction was executed it inverts its effects by dismissing results and resetting the state of affected registers.
-We will see in Chapter 3 that modern processors do not remove all traces of such transient instructions and thus enable
-Meltdown and Spectre attacks.
+An instruction which is mistakenly executed in advance, e.g. when a branch condition is predicted incorrectly by the branch predictor, 
+is called a \textit{transient instruction} ~\cite{lipp2018meltdown, kocher2018spectre}.
+When the CPU detects that a transient instruction was executed it inverts its effects by dismissing results 
+and resetting the state of affected registers.
+We will see in chapter ~\ref{ch:meltdownVersusSpectre} that modern processors do not remove all traces of transient instructions 
+and thus enable Meltdown and Spectre attacks.
 
 This Chapter introduced some fundamentals which are needed for understanding Meltdown and Spectre as well as their 
 effects on the architectural state of the CPU and the operating system. The next Chapter will show how these parts
@@ -194,7 +213,7 @@ are connected in the context of the exploits.
 
 %%%
 \chapter{Meltdown versus Spectre}
-\label{ch:contentI}
+\label{ch:meltdownVersusSpectre}
 %%%
 
 The following chapter deals with the common features and differences of Meltdown and Spectre based on the
@@ -208,7 +227,8 @@ The following chapter deals with the common features and differences of Meltdown
  Meltdown and Spectre both misuse out-of-order execution and transient instructions as techniques to access memory of 
  other contexts by analyzing side channel information of the CPU's cache. 
   Meltdown enables an attacker to read memory of kernel and user processes
-  in contrast to Spectre which just allows to dump memory of sandboxes or other user processes. Spectre affects all modern processors like Intel, AMD, and ARM while Meltdown
+  in contrast to Spectre which just allows to dump memory of sandboxes or other user processes. 
+  Spectre affects all modern processors like Intel, AMD, and ARM while Meltdown
  is only exploitable on Intel processors. The challenge of Spectre is that it has to be adapted for specific programs under attack. 
  Meltdown on the other hand is a more general approach with regard to its implementation. The following sections compare Meltdown and Spectre in depth.
  
@@ -255,7 +275,7 @@ The reloaded and thereby cached location can be detected by measuring the access
 time of flushed locations.
 Evict+Reload works similarly to Flush+Reload but instead of flushing the cache it accesses many uncached memory
 locations so that cached ones are evicted from the cache.
-This technique is useful when the flush instruction is not available, e.g. for high level JavaScript implementations of Spectre. 
+This technique is useful when the flush instruction is not available, e.g. for high-level JavaScript implementations of Spectre. 
 
 For both attacks the cache acts as a covert channel making the inner workings of the CPU visible to the outside world. 
 The next section explains the details of revealing secret data with the mentioned techniques. 
@@ -267,9 +287,9 @@ Meltdown and Spectre exploit the execution of transient instructions by accessin
  which are usually protected by the CPU, the operating system or sandboxes. 
 
 For revealing a secret byte two registers, R1 and R2, must be under control of the attacker. The contents of these registers have to be 
-combined with a reversible operation like add, subtract or XOR. Besides an array, the so called \textit{probe array}, has to be 
-initialized in the attacker's address space with the size of 256, i.e. byte size, times the size of a memory page. This array will 
-reveal secret bytes as explained below.
+combined with an operation like add, subtract or XOR. Besides an array, the so called \textit{probe array}, has to be 
+initialized in the attacker's address space with the size of 256, i.e. byte size, times the size of a memory page of the attacked machine.
+This array will reveal secret bytes as explained below.
 
 The transient instructions of Meltdown and Spectre consist of the following steps:
 The attacker loads the base address of the probe array into R1 and combines it with a secret byte loaded into R2. 
@@ -282,7 +302,7 @@ A cached element is loaded significantly faster into a register of the CPU than 
 If every element of the probe array is checked for being cached by utilizing techniques like Flush+Reload or Evict+Reload it is possible
 to reveal the secret byte because it matches the position of the cached element.
 This process can be executed iteratively to reveal many secret bytes from protected contexts. Its important to mention that this exploit
-applied by Meltdown and Spectre can also be realized with high level languages like JavaScript.
+applied by Meltdown and Spectre can also be realized with high-level languages like JavaScript.
 
 This chapter highlighted the common techniques of Meltdown and Spectre and how they can be used to access protected memory.
 The next chapter will focus on the differences of the exploits.
@@ -461,7 +481,7 @@ static int __attribute__((always_inline)) flush_reload(void *ptr) {
 }
 \end{lstlisting}
 
-Listing ~\ref{lst:computeThreshold} illustrates how the cache threshold can be determined.
+Listing ~\ref{lst:computeThreshold} illustrates how the cache-threshold can be determined.
 The implementation applies one million iterations to compute a precise threshold value.
 Therefore a pointer \texttt{ptr} is accessed in line 6 so that it's referenced data gets cached. 
 
@@ -545,7 +565,8 @@ of the probe array which contains 256 times 4096 bytes. The access of page sized
 and cached simultaneously. This would lead to invalid measurement results.
 
 In line 17 and 19 \texttt{sched\_yield} is called so that the Meltdown attack is executed by the next thread if more
-than one was configured. Increasing the number of threads should improve the chance of reading protected memory.
+than one was configured. 
+Increasing the number of threads should improve the chance of reading protected memory and reduce the error rate.
 
 
 \section{Spectre Implementation}
@@ -560,7 +581,7 @@ to manipulate the branch predictor.
 This section illustrates how Spectre creates a covert channel with Flush+Reload. 
 In listing ~\ref{lst:victim} the flush part of the Flush+Reload attack is shown. It utilizes the intrinsic instruction 
 \texttt{\_mm\_clflush} ~\cite{intelintrinsics} to clean the probe array \texttt{array2} from the cache. This part resets the cache state
-so that time measurements can be conducted afterwards. If Spectre is implemented in high level languages like JavaScript it
+so that time measurements can be conducted afterwards. If Spectre is implemented in high-level languages like JavaScript it
 might be the case that \texttt{\_mm\_clflush} is not available as a function call. Then other techniques like Evict+Reload have
 to be applied.
 
@@ -651,6 +672,42 @@ To achieve good measurements with Flush+Reload the Spectre implementation uses 1
 are significant. Within these iterations the branch predictor is trained with another 30 iterations leading to a low error rate (<0.01\%)
 of reading secret bytes from protected contexts.
 
+\subsection{Reading Secret Bytes}
+\label{ch:intro:motivation:A}
+
+Listing ~\ref{lst:maliciousX} shows how the starting address \texttt{malicious\_x} for the attack is computed.
+It contains the offset from a protected array \texttt{secret} to the gadget array \texttt{array1} 
+which is utilized to access the data through.
+
+\begin{lstlisting}[language=C, caption=Spectre: Malicious X, label={lst:maliciousX}]
+size_t malicious_x = (size_t)(secret - (char *)array1); /* default for malicious_x */
+\end{lstlisting}
+
+\texttt{malicious\_x} serves as an input for the \texttt{readMemoryByte} function in line 4 of listing ~\ref{lst:spectreReadingSecretBytes} 
+which contains all implementations presented above.
+Here \texttt{malicious\_x} is incremented to loop over all secret bytes of the \texttt{secret} array.
+The \texttt{score} variable represents an estimation for the effectiveness of the attack.
+It might be possible that more iterations have to be conducted to improve the results and to lower the error rate
+ or that the constant value \texttt{CACHE\_HIT\_THRESHOLD} has to be adapted to enhance the timing measurements of the exploit.
+In contrast to the Meltdown implementation there is no function for computing the cache-threshold dynamically depending on the attacked machine.
+Despite the same implementation could be applied in this scenario.
+\texttt{value} contains the actual secret byte which is revealed by one iteration of the attack.
+The whole process is repeated till all secret bytes are read indicated by \texttt{len}, i.e. the length of the secret byte array.
+
+\begin{lstlisting}[language=C, caption=Spectre: Reading Secret Bytes, label={lst:spectreReadingSecretBytes}]
+while (--len >= 0)
+{
+    printf("Reading at malicious_x = %p... ", (void *)malicious_x);
+    readMemoryByte(malicious_x++, value, score);
+    printf("%s: ", score[0] >= 2 * score[1] ? "Success" : "Unclear");
+    printf("0x%02X='%c' score=%d ", value[0],
+           (value[0] > 31 && value[0] < 127 ? value[0] : '?'), score[0]);
+    if (score[1] > 0)
+        printf("(second best: 0x%02X score=%d)", value[1], score[1]);
+    printf("\n");
+}
+\end{lstlisting}
+
 %%%
 \chapter{Countermeasures}
 \label{ch:countermeasures}
@@ -707,15 +764,21 @@ This can be done by software patches like \textit{retpolines} ~\cite{retpoline}.
 %%%
 
 This work presented Meltdown and Spectre with a detailed comparison and example implementations to give 
-an overview of the attacks and their implications. 
-The exploits demonstrate how the leakage of small traces within a processor lead to powerful side-channel attacks
+an overview of the attacks and their implications.
+They require a deep technical insight because a program written in a high-level language can be utilized 
+to reveal secret data from low-level parts of the processor, i.e. the cache.
+The different characteristics of Meltdown and Spectre are important to understand their practical impact
+and prevention techniques.
+Meltdown is a general purpose attack on Intel processors enabling privilege escalation while Spectre 
+works on many processors (e.g. Intel, AMD, ARM) but has to be adapted to victim code and just reveals secret data of user processes.
+The exploits demonstrate how the leakage of small traces within a processor leads to powerful side-channel attacks
 which threaten the modern world of computing. 
 Meltdown and Spectre introduce a new chapter in the world of side-channel attacks affecting mobile phones, laptops, browsers and 
 many other areas like cloud computing.
 Both attacks highlight the urgency for overthinking current processor designs and demonstrate that there is a tradeoff between
 fast and secure processors.
-Even though there are software solutions like KAISER to impede some issues, hardware solutions are inevitable for long-term 
-security of computing.
+Even though there are software solutions like KAISER or retpolines to impede some issues, 
+hardware solutions are inevitable for long-term security of future processors.
 
 \lstlistoflistings
 
